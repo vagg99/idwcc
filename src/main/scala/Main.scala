@@ -1,6 +1,11 @@
-import org.apache.log4j.{Level, Logger}
+package communityDetection
+
+import org.graphframes._
 import org.apache.spark.SparkConf
+import org.apache.spark.streaming.{Seconds, StreamingContext}
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
+import wcc.GraphFrameOps._
 
 /**
  * Created by tariq on 28/11/17.
