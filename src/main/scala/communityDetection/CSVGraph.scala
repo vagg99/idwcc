@@ -3,10 +3,10 @@ package communityDetection
 import org.apache.log4j.Logger
 import org.apache.spark.graphx._
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.graphframes._
-
+import org.apache.spark.sql.functions._
+import wcc.IncrementalDW
 import java.io._
 
 /**
