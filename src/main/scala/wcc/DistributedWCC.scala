@@ -66,6 +66,7 @@ object DistributedWCC {
     (dataGraph, cStats)
   }
 
+
   /**
    *
    * @param graph the graph on which to partition into communities
@@ -112,6 +113,7 @@ object DistributedWCC {
 
     communityMap
   }
+
 
   def printStats(communityMap: VertexRDD[VertexId]) = {
     Logger.getRootLogger.warn(s"Generated ${communityMap.values.distinct.count()} communities.")
@@ -229,6 +231,11 @@ object DistributedWCC {
     graph.cache()
     val before = System.currentTimeMillis()
 
+    // Print clustering coefficients at the beginning
+    graph.vertices.foreach { case (vId, vData) =>
+      println(s"Node $vId - Clustering Coefficient: ${vData.cc}")
+    }
+
     val pregelGraph = graph.pregel(Map.empty[Long, VertexMessage])(
       vprog = (vId: VertexId, data: VertexData, messages: Map[Long, VertexMessage]) => {
         val newData = data.copy()
@@ -284,13 +291,22 @@ object DistributedWCC {
     pregelGraph.vertices.count()
     Logger.getRootLogger.warn(s"Initial Partition took: ${System.currentTimeMillis() - before}")
 
-    pregelGraph.mapVertices((vId, vData) => {
+    // Return the partitioned graph
+    val partitionedGraph = pregelGraph.mapVertices((vId, vData) => {
       val data = vData.copy()
       data.changed = false
       data.neighbors = List.empty
       data
     }).partitionByCommunity(numPartitions, _.cId)
+
+    // Print clustering coefficients at the end
+    partitionedGraph.vertices.foreach { case (vId, vData) =>
+      println(s"Node $vId - Clustering Coefficient: ${vData.cc}")
+    }
+
+    partitionedGraph
   }
+
 
   /**
    * PHASE III
@@ -308,6 +324,7 @@ object DistributedWCC {
    */
   def refinePartition[ED: ClassTag](graph: Graph[VertexData, ED], sc: SparkContext) = {
     graph.cache()
+
 
     val globalCC = graph.vertices.map { case (vId, vData) => vData.cc }.sum / vertexCount
     // broadcasts are used to avoid network transfers all the time.
