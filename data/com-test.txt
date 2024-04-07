@@ -1,0 +1,16 @@
+# Undirected graph: ../../data/output/test.txt
+# test
+# Nodes: 2 Edges: 11
+# FromNodeId	ToNodeId
+1	88160
+1	118052
+1	161555
+1	244916
+1	447165
+1	500600
+2	27133
+2	62291
+2	170507
+2	299250
+2	326776
+2	331042
