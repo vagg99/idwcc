@@ -66,7 +66,6 @@ object DistributedWCC {
     (dataGraph, cStats)
   }
 
-
   /**
    *
    * @param graph the graph on which to partition into communities
@@ -110,7 +109,6 @@ object DistributedWCC {
     printCommunities(communityMap)  // print the analytical communities with the verticies inside
     logCommunities(communityMap)  // store the analytical communities with the verticies inside
 
-
     communityMap
   }
 
@@ -130,9 +128,16 @@ object DistributedWCC {
 
   // Analytical info for the final communities
   def printCommunities(communityMap: VertexRDD[VertexId]) = {
-    // print the analytical communities with the verticies inside []
+    //  analytical communities with the verticies inside []
     val communities = communityMap.map(x => (x._2, x._1)).groupByKey().sortBy(_._1, ascending = true)
     communities.collect().foreach(x => println(s"Community's nodeHUB ${x._1}: [${x._2.mkString(", ")}]"))
+    // calculate the triangles of each community
+    val triangles = communityMap.map(x => (x._2, 1)).reduceByKey(_ + _).sortBy(_._2, ascending = false)
+    triangles.collect().foreach(x => println(s"Community with HUB ${x._1} has ${x._2} triangles."))
+    /*
+    FAULTY TRIANGLE COUNT
+    NEEDS WORK!!!
+     */
   }
 
   // Analytical info for the final communities inside the log file under the resultsDWCC folder
@@ -143,15 +148,17 @@ object DistributedWCC {
     // create the new txt file under the resultsDWCC folder
     val logCommunities = new PrintWriter(s"resultsDWCC/communities-$timestamp.txt")
 
-    // print the analytical communities with the verticies inside []
+    // print the analytical communities with the verticies
     val communities = communityMap.map(x => (x._2, x._1)).groupByKey().sortBy(_._1, ascending = true)
     communities.collect().foreach(x => logCommunities.println(s"Community's nodeHUB ${x._1}: [${x._2.mkString(", ")}]"))
 
     // add every Logger warn message as printed in the console
     Logger.getRootLogger.warn(s"Generated ${communityMap.values.distinct.count()} communities.")
 
+
     logCommunities.close()
   }
+
 
   /**
    * PHASE I
@@ -322,6 +329,14 @@ object DistributedWCC {
    * @tparam ED the original edge attribute
    * @return
    */
+
+  def printClusteringCoefficients[ED: ClassTag](graph: Graph[VertexData, ED]): Unit = {
+    graph.vertices.foreach { case (vId, vData) =>
+      println(s"Node $vId - Clustering Coefficient: ${vData.cc}")
+    }
+  }
+
+
   def refinePartition[ED: ClassTag](graph: Graph[VertexData, ED], sc: SparkContext) = {
     graph.cache()
 
@@ -353,7 +368,8 @@ object DistributedWCC {
 
       Logger.getRootLogger.warn(s"New WCC ${"%.3f".format(newWcc)}")
       Logger.getRootLogger.warn(s"Retries left $retriesLeft")
-
+      // Calculate clustering coefficients and print them
+      printClusteringCoefficients(bestPartition)
       // if the movements improve WCC apply them
       if (newWcc > bestWcc) {
         if (newWcc / bestWcc - 1 > threshold) {
@@ -446,6 +462,7 @@ object DistributedWCC {
       bestMovement(vertex, vcDegrees.get, bCommunityStats.value, globalCC, vertexCount)
     })
   }
+
 
   /**
    * Implementation of the "bestMovement" algorithm:
@@ -567,5 +584,8 @@ object DistributedWCC {
       }
     }, _ + _).mapValues(_/2)
   }
+
+
+
 
 }
