@@ -9,6 +9,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.{VertexRDD, _}
 import org.apache.spark.graphx.lib.TriangleCount
+import org.apache.spark.graphx._
 import wcc.GraphXOps.GXOperations
 import java.io.PrintWriter
 import java.text.SimpleDateFormat
@@ -108,10 +109,12 @@ object DistributedWCC {
     printStats(communityMap)
     printCommunities(communityMap)  // print the analytical communities with the verticies inside
     logCommunities(communityMap)  // store the analytical communities with the verticies inside
+    // final triangles
+    countTriangles(graph).collect().foreach(println)
+
 
     communityMap
   }
-
 
   def printStats(communityMap: VertexRDD[VertexId]) = {
     Logger.getRootLogger.warn(s"Generated ${communityMap.values.distinct.count()} communities.")
@@ -131,13 +134,7 @@ object DistributedWCC {
     //  analytical communities with the verticies inside []
     val communities = communityMap.map(x => (x._2, x._1)).groupByKey().sortBy(_._1, ascending = true)
     communities.collect().foreach(x => println(s"Community's nodeHUB ${x._1}: [${x._2.mkString(", ")}]"))
-    // calculate the triangles of each community
-    val triangles = communityMap.map(x => (x._2, 1)).reduceByKey(_ + _).sortBy(_._2, ascending = false)
-    triangles.collect().foreach(x => println(s"Community with HUB ${x._1} has ${x._2} triangles."))
-    /*
-    FAULTY TRIANGLE COUNT
-    NEEDS WORK!!!
-     */
+
   }
 
   // Analytical info for the final communities inside the log file under the resultsDWCC folder
@@ -155,8 +152,13 @@ object DistributedWCC {
     // add every Logger warn message as printed in the console
     Logger.getRootLogger.warn(s"Generated ${communityMap.values.distinct.count()} communities.")
 
-
     logCommunities.close()
+  }
+
+  // method that counts the number of triangles each vertex is part of
+  def countTriangles[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]): VertexRDD[Int] = {
+    val triangleCounts = graph.triangleCount().vertices
+    triangleCounts
   }
 
 
@@ -584,6 +586,7 @@ object DistributedWCC {
       }
     }, _ + _).mapValues(_/2)
   }
+
 
 
 
