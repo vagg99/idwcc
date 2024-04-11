@@ -81,7 +81,7 @@ object DistributedWCC {
                                       maxRetries: Int = this.maxRetries,
                                       partitions: Int = this.numPartitions,
                                       isCanonical: Boolean = false
-                                     ) = {
+                                     ): VertexRDD[VertexId] = {
     require(maxRetries >= 0, s"Number of iterations must be greater than or equal to 0," +
       s" but got $maxRetries")
     require(partitions > 0 , s"Number of partitions must be greater than 0," +
@@ -115,7 +115,7 @@ object DistributedWCC {
     communityMap
   }
 
-  def printStats(communityMap: VertexRDD[VertexId]) = {
+  def printStats(communityMap: VertexRDD[VertexId]): Unit = {
     Logger.getRootLogger.warn(s"Generated ${communityMap.values.distinct.count()} communities.")
     val majorCommunityStats = communityMap.map(x => (x._2, 1L)).reduceByKey(_ + _).filter(_._2 > 1)
     Logger.getRootLogger.warn(s"Generated ${majorCommunityStats.count()} major communities.")
@@ -129,7 +129,7 @@ object DistributedWCC {
   }
 
   // Analytical info for the final communities
-  def printCommunities(communityMap: VertexRDD[VertexId]) = {
+  def printCommunities(communityMap: VertexRDD[VertexId]): Unit = {
     //  analytical communities with the verticies inside []
     val communities = communityMap.map(x => (x._2, x._1)).groupByKey().sortBy(_._1, ascending = true)
     communities.collect().foreach(x => println(s"Community's nodeHUB ${x._1}: [${x._2.mkString(", ")}]"))
@@ -137,7 +137,7 @@ object DistributedWCC {
   }
 
   // Analytical info for the final communities inside the log file under the resultsDWCC folder
-  def logCommunities(communityMap: VertexRDD[VertexId]) = {
+  def logCommunities(communityMap: VertexRDD[VertexId]): Unit = {
     // Get the current timestamp
     val timestamp = new SimpleDateFormat("dd-MM-yyyy-HH-mm-ss").format(new Date())
 
@@ -349,7 +349,7 @@ object DistributedWCC {
   }
 
 
-  def refinePartition[ED: ClassTag](graph: Graph[VertexData, ED], sc: SparkContext) = {
+  def refinePartition[ED: ClassTag](graph: Graph[VertexData, ED], sc: SparkContext): (Graph[VertexData, ED], Map[VertexId, CommunityData]) = {
     graph.cache()
 
 
