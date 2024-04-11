@@ -108,9 +108,8 @@ object DistributedWCC {
 
     printStats(communityMap)
     printCommunities(communityMap)  // print the analytical communities with the verticies inside
-    logCommunities(communityMap)  // store the analytical communities with the verticies inside
-    // final triangles
-    countTriangles(graph).collect().foreach(println)
+    logCommunities(communityMap)    // store the analytical communities with the verticies inside
+    countTriangles(graph).collect().foreach(println)      // final triangles
 
 
     communityMap
@@ -156,6 +155,17 @@ object DistributedWCC {
   }
 
   // method that counts the number of triangles each vertex is part of
+
+  /**
+    * Count the number of triangles each vertex is part of.
+   * @param graph the graph on which to count triangles
+   * @tparam VD the original vertex attribute
+   * @tparam ED the original edge attribute
+   * @return
+   * @note This method is used to print the final triangles count for each vertex
+   *       in the graph.
+   *       It is not used in the main algorithm. Mostly used as a test method.
+   **/
   def countTriangles[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]): VertexRDD[Int] = {
     val triangleCounts = graph.triangleCount().vertices
     triangleCounts
