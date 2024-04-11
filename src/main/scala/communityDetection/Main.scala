@@ -11,6 +11,8 @@ import wcc.GraphFrameOps._
  * Created by tariq on 28/11/17.
  */
 
+//test
+
 object Main {
   val FULLRUN = 1
   val STREAM = 2
