@@ -7,33 +7,23 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
 import wcc.GraphFrameOps._
 
-/**
- * Created by tariq on 28/11/17.
- */
-
 object Main {
   val FULLRUN = 1
   val STREAM = 2
 
   def main(args: Array[String]): Unit = {
     val sparkConf = new SparkConf().setAppName("CommunityDetection")
+    val filePath = "data/com-amazon.ungraph.txt"
+    Logger.getLogger("org").setLevel(Level.ERROR)
 
-    // Path to the graph file (e.g"RDyn/results/1000_1000_15_0.7_0.8_0.3_1/graph-999.txt"., "data/com-amazon.ungraph.txt")
-    val filePath = "data/custom.txt"
-
-    // check Spark configuration for master URL, set it to local if not configured
     if (!sparkConf.contains("spark.master")) {
       sparkConf.setMaster("local[*]")
     }
-
-
-    // Set logging level if log4j not configured (override by adding log4j.properties to classpath)
 
     Logger.getRootLogger.setLevel(Level.WARN)
     Logger.getLogger("org").setLevel(Level.ERROR)
     Logger.getRootLogger.warn("Getting context!!")
 
-    // Load and partition Graph
     val ssc = new StreamingContext(sparkConf, Seconds(1))
     val spark = SparkSession.builder().config(ssc.sparkContext.getConf).getOrCreate()
 
@@ -43,18 +33,15 @@ object Main {
     val operation = FULLRUN
 
     operation match {
-
       case FULLRUN =>
         loadAndRegionalizeGraph(spark, filePath)
 
       case STREAM =>
         CSVGraph.testStream(spark, filePath)
-
     }
 
     ssc.start()
     ssc.awaitTermination()
-
   }
 
   def loadAndRegionalizeGraph(spark: SparkSession, filePath: String, edgeCount:Double=0) = {
@@ -68,7 +55,6 @@ object Main {
     Logger.getRootLogger.warn("graph is loaded!!")
     Logger.getRootLogger.warn(s"vertices: ${graph.vertices.count}, edges: ${graph.edges.count}")
 
-    // JOIN GRAPH WITH COMMUNITIES
     val communityDF = graph.scalableCommunityDetection(spark)
     val regionalizedGraph = GraphFrame(graph.vertices.join(communityDF, "id"), graph.edges).cache()
     regionalizedGraph

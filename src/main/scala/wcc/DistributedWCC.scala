@@ -9,6 +9,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.{VertexRDD, _}
 import org.apache.spark.graphx.lib.TriangleCount
+import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx._
 import wcc.GraphXOps.GXOperations
 import java.io.PrintWriter
@@ -33,7 +34,7 @@ object DistributedWCC {
   // Main parameters
   private val threshold = 0.01f         // default threshold 0.01
   private var maxRetries = 5            // default number of retries 5
-  private var numPartitions = 200  // default number of partitions 200
+  private var numPartitions = 200       // default number of partitions 200
   var vertexCount = 0L
   // Main parameters end
   // --------------------------------------------
@@ -110,7 +111,11 @@ object DistributedWCC {
     printCommunities(communityMap)  // print the analytical communities with the verticies inside
     logCommunities(communityMap)    // store the analytical communities with the verticies inside
     countTriangles(graph).collect().foreach(println)      // final triangles
+    // the countTriangles print format looks like this:
+    // (vertexId, triangleCount)
 
+    // save the results * NEEDS SERIOUS WORK *
+    // saveResults(graph, communityMap)
 
     communityMap
   }
@@ -171,6 +176,29 @@ object DistributedWCC {
     triangleCounts
   }
 
+
+  def saveResults[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED], communityMap: VertexRDD[VertexId]): Unit = {
+    val vertices = graph.vertices
+    val edges = graph.edges
+    val triangleCounts = countTriangles(graph)
+    val communityStats = communityMap.map(x => (x._2, 1L)).reduceByKey(_ + _).filter(_._2 > 1)
+    val majorCommunities = communityStats.sortBy(_._2, ascending = false).take(10)
+
+    val timestamp = new SimpleDateFormat("yyyy-MM-dd-HH_mm_ss_SSS").format(new Date())
+    var counter = 0
+
+    def saveWithCounter(rdd: RDD[_], base: String): Unit = {
+      rdd.saveAsTextFile(s"$base${timestamp}_$counter")
+      counter += 1
+    }
+
+    saveWithCounter(vertices.map(_.toString()), "resultsDWCC/vertices_")
+    saveWithCounter(edges.map(_.toString()), "resultsDWCC/edges_")
+    saveWithCounter(triangleCounts.map(_.toString()), "resultsDWCC/triangleCounts_")
+    saveWithCounter(communityMap.map(_.toString()), "resultsDWCC/communityMap_")
+    saveWithCounter(communityStats.map(_.toString()), "resultsDWCC/communityStats_")
+    saveWithCounter(communityMap.map(_.toString()), "resultsDWCC/communityMap_")
+  }
 
   /**
    * PHASE I

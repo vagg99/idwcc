@@ -14,7 +14,7 @@ import java.io._
  */
 object CSVGraph {
   // classic
-  val dataPath = "data/custom.txt"
+  val dataPath = "data/com-amazon.ungraph.txt"
   // custom path for the RDyn python script results
   //val rdynPath = "RDyn/results/1000_1000_15_0.7_0.8_0.3_1/graph-999.txt"
   def loadGraph(spark: SparkSession, graphFileHadoopPath: String) = {
