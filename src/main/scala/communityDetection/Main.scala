@@ -13,7 +13,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val sparkConf = new SparkConf().setAppName("CommunityDetection")
-    val filePath = "data/com-amazon.ungraph.txt"
+    val filePath = "data/custom.txt"
     Logger.getLogger("org").setLevel(Level.ERROR)
 
     if (!sparkConf.contains("spark.master")) {
