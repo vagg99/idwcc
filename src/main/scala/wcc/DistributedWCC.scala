@@ -347,9 +347,9 @@ object DistributedWCC {
     }).partitionByCommunity(numPartitions, _.cId)
 
     // Print clustering coefficients at the end
-    partitionedGraph.vertices.foreach { case (vId, vData) =>
-      println(s"Node $vId - Clustering Coefficient: ${vData.cc}")
-    }
+//    partitionedGraph.vertices.foreach { case (vId, vData) =>
+//      println(s"Node $vId - Clustering Coefficient: ${vData.cc}")
+//    }
 
     partitionedGraph
   }

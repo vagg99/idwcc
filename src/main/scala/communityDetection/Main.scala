@@ -44,7 +44,7 @@ object Main {
     ssc.awaitTermination()
   }
 
-  def loadAndRegionalizeGraph(spark: SparkSession, filePath: String, edgeCount:Double=0) = {
+  def loadAndRegionalizeGraph(spark: SparkSession, filePath: String, edgeCount: Double = 0) = {
     val graph = if (edgeCount == 0) {
       CSVGraph.loadGraph(spark, filePath)
     } else {

@@ -4,6 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/idwcc.iml" filepath="$PROJECT_DIR$/.idea/modules/idwcc.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/idwcc.idwcc-build.iml" filepath="$PROJECT_DIR$/.idea/modules/idwcc.idwcc-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/idwcc/idwcc.main.iml" filepath="$PROJECT_DIR$/.idea/modules/idwcc/idwcc.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/idwcc/idwcc.test.iml" filepath="$PROJECT_DIR$/.idea/modules/idwcc/idwcc.test.iml" />
     </modules>
   </component>
 </project>
