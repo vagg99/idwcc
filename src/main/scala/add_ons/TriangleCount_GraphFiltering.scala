@@ -1,11 +1,10 @@
 package add_ons
 
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.log4j.Logger
 
 class TriangleCount_GraphFiltering extends Serializable {
+
   def run(queryTimeInterval: (Long, Long), graph: Graph[Int, (Long, Long)]): VertexRDD[Double] = {
     runPreProcessed(graph, queryTimeInterval)
   }
@@ -53,30 +52,28 @@ class TriangleCount_GraphFiltering extends Serializable {
       while (iter.hasNext) {
         val commonVertex = iter.next()
         if (commonVertex != ctx.srcId && commonVertex != ctx.dstId && largeSet.contains(commonVertex)) {
-                //val queryLength = queryTimeInterval._2 - queryTimeInterval._1 + 1
-                //val overlapRequired = (overlapPercentage / 100.0) * queryLength
 
-                // Calculate the intersections step-by-step and stop if any are None
-                val interTimeIntervalOpt = intersectIntervals(ctx.srcAttr(commonVertex), ctx.dstAttr(commonVertex))
-                interTimeIntervalOpt match {
-                  case Some(interTimeInterval) =>
-                    val intersectedTimeIntervalOpt = intersectIntervals(interTimeInterval, ctx.srcAttr(ctx.dstId))
-                    intersectedTimeIntervalOpt match {
-                      case Some(intersectedTimeInterval) =>
-                        val intersectTimeIntervalOpt = intersectIntervals(intersectedTimeInterval, queryTimeInterval)
-                        intersectTimeIntervalOpt match {
-                          case Some(intersectTimeInterval) =>
-                            val intersectLength = intersectTimeInterval._2 - intersectTimeInterval._1 + 1
-                            val queryLength = queryTimeInterval._2 - queryTimeInterval._1 + 1
-                            val triangleScore = intersectLength.toDouble / queryLength
-                            score += 1
-                          case None => // No valid final intersect time interval, skip to the next triangle
-                        }
-                      case None => // No valid intersected time interval, skip to the next triangle
-                    }
-                  case None => // No valid inter time interval, skip to the next triangle
-                }
-
+          // Calculate the intersections step-by-step and stop if any are None
+          val interTimeIntervalOpt = intersectIntervals(ctx.srcAttr(commonVertex), ctx.dstAttr(commonVertex))
+          interTimeIntervalOpt match {
+            case Some(interTimeInterval) =>
+              val intersectedTimeIntervalOpt = intersectIntervals(interTimeInterval, ctx.srcAttr(ctx.dstId))
+              intersectedTimeIntervalOpt match {
+                case Some(intersectedTimeInterval) =>
+                  val intersectTimeIntervalOpt = intersectIntervals(intersectedTimeInterval, queryTimeInterval)
+                  intersectTimeIntervalOpt match {
+                    case Some(intersectTimeInterval) =>
+                      val intersectLength = intersectTimeInterval._2 - intersectTimeInterval._1 + 1
+                      val queryLength = queryTimeInterval._2 - queryTimeInterval._1 + 1
+                      // val triangleScore = intersectLength.toDouble / queryLength
+                      // (Note: Unused variable logic from original script kept as comment)
+                      score += 1
+                    case None => // No valid final intersect time interval
+                  }
+                case None => // No valid intersected time interval
+              }
+            case None => // No valid inter time interval
+          }
         }
       }
 
@@ -92,35 +89,23 @@ class TriangleCount_GraphFiltering extends Serializable {
 object TriangleCount_GraphFiltering {
   def main(args: Array[String]): Unit = {
 
-    val conf = new SparkConf().setAppName("TriangleCount_GraphFiltering").setMaster("local[*]")
-    Logger.getRootLogger.setLevel(Level.WARN)
-    Logger.getLogger("org").setLevel(Level.ERROR)
-    Logger.getRootLogger.warn("Getting context!!")
-    val sc = new SparkContext(conf)
-    val spark = SparkSession.builder().config(conf).getOrCreate()
-    Logger.getRootLogger.warn("We have context!!")
+    // --- 1. SETUP ---
+    val (sc, spark) = GraphUtils.setupSpark("TriangleCount_GraphFiltering")
 
-    // Read the file and skip header lines
-    val lines = sc.textFile("data/amazon_generated_intervals.txt")
-    val edges = lines
-      .filter(line => !line.startsWith("#")) // Skip header lines
-      .map { line =>
-        val fields = line.split("\t")
-        val srcId = fields(0).toLong
-        val dstId = fields(1).toLong
-        val attr1 = fields(2).toLong
-        val attr2 = fields(3).toLong
-        Edge(srcId, dstId, (attr1, attr2))
-      }.cache
-
-    Logger.getRootLogger.warn("edges loaded!!")
-
-    // Define the time interval
+    // --- 2. CONFIGURATION ---
+    // Use command line argument for file path if provided, otherwise default to Amazon
+    val inputPath = if (args.length > 0) args(0) else "data/amazon_generated_intervals.txt"
     val queryTimeInterval: (Long, Long) = (2, 2)
+
+    // --- 3. LOAD DATA ---
+    Logger.getRootLogger.warn(s"Loading edges from $inputPath...")
+    val edges = GraphUtils.loadEdges(sc, inputPath).cache()
+    Logger.getRootLogger.warn("edges loaded!!")
 
     // Record the start time
     val startTime = System.currentTimeMillis()
 
+    // --- 4. EXECUTE ALGORITHM ---
     // Filter the edges based on the query time interval
     val filteredEdges = edges.filter { edge =>
       val (attr1, attr2) = edge.attr
@@ -129,18 +114,11 @@ object TriangleCount_GraphFiltering {
       start <= end
     }
 
-
     // Create the subgraph directly from the filtered edges
     val subgraph = Graph.fromEdges(filteredEdges, defaultValue = 1)
 
-    //Logger.getRootLogger.warn(s"filtered vertices: ${subgraph.vertices.count}, filtered edges: ${subgraph.edges.count}")
-
-
-    // Create an instance of TriangleScoringWithTimeIntervals
+    // Create an instance of the class and run
     val triangleScorer = new TriangleCount_GraphFiltering()
-
-    //Logger.getRootLogger.warn("Phase: Preprocessing - Counting Triangles")
-    // Run the algorithm on the subgraph
     val scores = triangleScorer.run(queryTimeInterval, subgraph)
 
     // Aggregate the total number of triangles
@@ -154,10 +132,8 @@ object TriangleCount_GraphFiltering {
     val elapsedTime = endTime - startTime
     println(s"Time taken to calculate triangle scores: $elapsedTime milliseconds")
 
-
+    // --- 5. TEARDOWN ---
     sc.stop()
     spark.stop()
   }
 }
-
-
