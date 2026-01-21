@@ -1,0 +1,7 @@
+# Ignore specific large datasets in data/ folder
+data/com-lj.ungraph.txt
+data/com-orkut.ungraph.txt
+data/com-youtube.ungraph.txt
+data/lj_generated_intervals.txt
+data/orkut_generated_intervals.txt
+data/youtube_generated_intervals.txt

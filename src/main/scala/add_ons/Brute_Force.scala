@@ -114,7 +114,7 @@ object Brute_Force {
       .getOrCreate()
 
     // Read the file and skip header lines
-    val dataPath = "data/amazon777.txt"
+    val dataPath = "data/amazon_generated_intervals.txt"
     val lines = spark.sparkContext.textFile(dataPath).filter(!_.startsWith("#")) // Skip header lines
 
     // Define the schema for edges
