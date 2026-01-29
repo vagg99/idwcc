@@ -1,12 +1,12 @@
 package add_ons
 
-import org.apache.log4j.{Level, Logger}
+import org.apache.log4j.Logger
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.graphx._
 import org.apache.spark.util.AccumulatorV2
 import scala.collection.mutable.ListBuffer
 
-// Define accumulator for triangles
+// --- 1. ACCUMULATOR DEFINITION ---
 class TriangleAccumulator extends AccumulatorV2[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long)), List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]] {
   private val triangles = ListBuffer[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]()
 
@@ -31,9 +31,9 @@ class TriangleAccumulator extends AccumulatorV2[(VertexId, VertexId, VertexId, (
   override def value: List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))] = triangles.toList
 }
 
+// ---  MAIN CLASS ---
 class Brute_Force(spark: SparkSession) extends Serializable {
 
-  // Method to run the main computation
   def run(graph: Graph[Int, (Long, Long)]): (VertexRDD[Double], List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]) = {
     runPreProcessed(graph)
   }
@@ -78,6 +78,7 @@ class Brute_Force(spark: SparkSession) extends Serializable {
           val triangle = List(ctx.srcId, commonVertex, ctx.dstId).sorted match {
             case List(a, b, c) => (a, b, c)
           }
+          // Safely accessing attributes (assuming map integrity from join)
           val edge1Interval = ctx.srcAttr(commonVertex)
           val edge2Interval = ctx.dstAttr(commonVertex)
           val edge3Interval = ctx.srcAttr(ctx.dstId)
@@ -102,35 +103,24 @@ class Brute_Force(spark: SparkSession) extends Serializable {
 
 object Brute_Force {
   def main(args: Array[String]): Unit = {
-    // Set Log4j level to WARN
-    Logger.getRootLogger.setLevel(Level.WARN)
-    Logger.getLogger("org").setLevel(Level.ERROR)
-    Logger.getRootLogger.warn("Getting context!!")
 
-    // Initialize Spark session
-    val spark = SparkSession.builder()
-      .appName("BruteForceTriangles")
-      .master("local[*]")
-      .getOrCreate()
+    val (sc, spark) = GraphUtils.setupSpark("BruteForceTriangles")
 
-    // Read the file and skip header lines
-    val dataPath = "data/amazon_generated_intervals.txt"
-    val lines = spark.sparkContext.textFile(dataPath).filter(!_.startsWith("#")) // Skip header lines
+    // LOAD DATA
+    val rawEdges = if (args.length > 0) {
+      GraphUtils.loadEdges(sc, args(0))
+    } else {
+      GraphUtils.loadEdges(sc)
+    }
 
-    // Define the schema for edges
-    val edgesRDD = lines.map { line =>
-      val parts = line.split("\t")
-      Edge(parts(0).toLong, parts(1).toLong, (parts(2).toLong, parts(3).toLong))
-    }.filter(edge => edge.srcId != edge.dstId) // Filter out self-loops
+    // Filter out self-loops
+    val edges = rawEdges.filter(edge => edge.srcId != edge.dstId)
 
-    // Create RDD for vertices
-    val verticesRDD = edgesRDD.flatMap(edge => Seq((edge.srcId, 1), (edge.dstId, 1))).distinct()
-
-    // Create GraphX graph from vertices and edges RDDs
-    val graph: Graph[Int, (Long, Long)] = Graph(verticesRDD, edgesRDD)
+    // Create GraphX graph
+    val graph: Graph[Int, (Long, Long)] = Graph.fromEdges(edges, defaultValue = 1)
 
     Logger.getRootLogger.warn("Graph is loaded!!")
-    Logger.getRootLogger.warn(s"Vertices: ${graph.vertices.count}, Edges: ${graph.edges.count}")
+    // Logger.getRootLogger.warn(s"Vertices: ${graph.vertices.count}, Edges: ${graph.edges.count}")
 
     // Create an instance of Brute_Force
     val triangleScorer = new Brute_Force(spark)
@@ -144,29 +134,28 @@ object Brute_Force {
     val (scores, triangles) = triangleScorer.run(graph)
 
     // Aggregate the total number of triangles
-    val totalTriangles = triangles.size/3
+    val totalTriangles = triangles.size / 3
     println(s"Total number of triangles: $totalTriangles")
-    var kostas: Int = 0
-    // Print formed triangles with edge intervals
+
+    var intersectCount: Int = 0
     println("Formed triangles with edge intervals:")
-    //print(triangles.size/3)
+
+    // Check for edge intersection and count
     triangles.foreach { case (v1, v2, v3, e1, e2, e3) =>
-      // Debug output for triangles
-
-
-      // Check for edge intersection and print intervals
       if (intersectIntervals(e1, e2) && intersectIntervals(e1, e3) && intersectIntervals(e2, e3)) {
-        kostas += 1
+        intersectCount += 1
       }
     }
+
     val endTime = System.currentTimeMillis()
-    println(kostas/3)
+
+    println(intersectCount / 3)
 
     // Calculate the elapsed time
     val elapsedTime = endTime - startTime
     println(s"Time taken to calculate triangle scores: $elapsedTime milliseconds")
 
-    // Stop Spark session
+    sc.stop()
     spark.stop()
   }
 

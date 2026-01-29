@@ -1,12 +1,11 @@
 package add_ons
 
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.log4j.Logger
 import scala.collection.mutable
 
 class Brute_Force_with_intervals extends Serializable {
+
   def run(graph: Graph[Int, (Long, Long)]): VertexRDD[Double] = {
     runPreProcessed(graph)
   }
@@ -73,48 +72,33 @@ class Brute_Force_with_intervals extends Serializable {
     val scores: VertexRDD[Double] = setGraph.aggregateMessages(ctx => edgeFunc(ctx), _ + _)
     scores
   }
-
 }
 
 object Brute_Force_with_intervals {
   def main(args: Array[String]): Unit = {
 
-    val conf = new SparkConf().setAppName("TriangleScoringWithTimeIntervals").setMaster("local[*]")
-    Logger.getRootLogger.setLevel(Level.WARN)
-    Logger.getLogger("org").setLevel(Level.ERROR)
-    Logger.getRootLogger.warn("Getting context!!")
-    val sc = new SparkContext(conf)
-    val spark = SparkSession.builder().config(conf).getOrCreate()
-    Logger.getRootLogger.warn("We have context!!")
+    val (sc, spark) = GraphUtils.setupSpark("Brute_Force_with_intervals")
 
-    // Read the file and skip header lines
-    val lines = sc.textFile("data/amazon777.txt")
-    val edges = lines
-      .filter(line => !line.startsWith("#")) // Skip header lines
-      .map { line =>
-        val fields = line.split("\t")
-        val srcId = fields(0).toLong
-        val dstId = fields(1).toLong
-        val attr1 = fields(2).toLong
-        val attr2 = fields(3).toLong
-        Edge(srcId, dstId, (attr1, attr2))
-      }
+    // LOAD DATA
+    // If args exist, use args(0), otherwise GraphUtils uses the default automatically
+    val edges = if (args.length > 0) {
+      GraphUtils.loadEdges(sc, args(0))
+    } else {
+      GraphUtils.loadEdges(sc)
+    }
 
-    // Create the graph from the edges RDD
-    val graph: Graph[Int, (Long, Long)] = Graph.fromEdges(edges, defaultValue = 1)
+    val graph = Graph.fromEdges(edges, defaultValue = 1)
 
     Logger.getRootLogger.warn("graph is loaded!!")
-    Logger.getRootLogger.warn(s"vertices: ${graph.vertices.count}, edges: ${graph.edges.count}")
+    // Uncomment the next line if you want to verify counts (might take extra time on large graphs)
+    // Logger.getRootLogger.warn(s"vertices: ${graph.vertices.count}, edges: ${graph.edges.count}")
 
-    // Create an instance of TriangleScoringWithTimeIntervals
     val triangleScorer = new Brute_Force_with_intervals()
 
     Logger.getRootLogger.warn("Phase: Preprocessing - Counting Triangles")
 
-    // Record the start time
     val startTime = System.currentTimeMillis()
 
-    // Run the algorithm
     val scores = triangleScorer.run(graph)
 
     // Aggregate the total number of triangles
@@ -126,11 +110,9 @@ object Brute_Force_with_intervals {
     val endTime = System.currentTimeMillis()
 
     // Calculate the elapsed time
-    val elapsedTime = endTime - startTime
-    println(s"Time taken to calculate triangle scores: $elapsedTime milliseconds")
+    println(s"Time taken to calculate triangle scores: ${endTime - startTime} milliseconds")
 
     sc.stop()
     spark.stop()
   }
 }
-

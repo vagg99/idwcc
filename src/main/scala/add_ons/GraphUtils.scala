@@ -8,14 +8,10 @@ import org.apache.log4j.{Level, Logger}
 
 object GraphUtils {
 
-  /**
-   * Initializes SparkContext and SparkSession with standard configuration.
-   * Reduces log noise automatically.
-   */
+  val DefaultDataset = "data/amazon_generated_intervals.txt"
+
   def setupSpark(appName: String): (SparkContext, SparkSession) = {
     val conf = new SparkConf().setAppName(appName).setMaster("local[*]")
-
-    // Set logging to reduce noise
     Logger.getRootLogger.setLevel(Level.WARN)
     Logger.getLogger("org").setLevel(Level.ERROR)
 
@@ -27,12 +23,14 @@ object GraphUtils {
   }
 
   /**
-   * Loads edges from a text file (tab-separated).
-   * Format: srcId \t dstId \t attr1 \t attr2
+   * Loads edges.
+   * If 'path' is not provided, it defaults to GraphUtils.DefaultDataset
    */
-  def loadEdges(sc: SparkContext, path: String): RDD[Edge[(Long, Long)]] = {
+  def loadEdges(sc: SparkContext, path: String = DefaultDataset): RDD[Edge[(Long, Long)]] = {
+    Logger.getRootLogger.warn(s"Loading edges from $path...")
+
     sc.textFile(path)
-      .filter(line => !line.startsWith("#")) // Skip header lines
+      .filter(line => !line.startsWith("#"))
       .map { line =>
         val fields = line.split("\t")
         val srcId = fields(0).toLong

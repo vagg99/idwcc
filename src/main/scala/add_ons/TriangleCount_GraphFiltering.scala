@@ -89,23 +89,13 @@ class TriangleCount_GraphFiltering extends Serializable {
 object TriangleCount_GraphFiltering {
   def main(args: Array[String]): Unit = {
 
-    // --- 1. SETUP ---
     val (sc, spark) = GraphUtils.setupSpark("TriangleCount_GraphFiltering")
-
-    // --- 2. CONFIGURATION ---
-    // Use command line argument for file path if provided, otherwise default to Amazon
-    val inputPath = if (args.length > 0) args(0) else "data/amazon_generated_intervals.txt"
     val queryTimeInterval: (Long, Long) = (2, 2)
 
-    // --- 3. LOAD DATA ---
-    Logger.getRootLogger.warn(s"Loading edges from $inputPath...")
-    val edges = GraphUtils.loadEdges(sc, inputPath).cache()
-    Logger.getRootLogger.warn("edges loaded!!")
+    val edges = if (args.length > 0) GraphUtils.loadEdges(sc, args(0)) else GraphUtils.loadEdges(sc)
 
-    // Record the start time
     val startTime = System.currentTimeMillis()
 
-    // --- 4. EXECUTE ALGORITHM ---
     // Filter the edges based on the query time interval
     val filteredEdges = edges.filter { edge =>
       val (attr1, attr2) = edge.attr
@@ -132,7 +122,6 @@ object TriangleCount_GraphFiltering {
     val elapsedTime = endTime - startTime
     println(s"Time taken to calculate triangle scores: $elapsedTime milliseconds")
 
-    // --- 5. TEARDOWN ---
     sc.stop()
     spark.stop()
   }
