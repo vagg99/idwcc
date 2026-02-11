@@ -6,9 +6,9 @@ import org.apache.spark.sql.SparkSession
 class Brute_Force(spark: SparkSession) extends Serializable {
 
   def run(graph: Graph[Int, (Long, Long)]): (VertexRDD[Double], List[GraphUtils.TriangleMetadata]) = {
-    // Uses the shared helper to avoid duplication warnings
-    val setGraph = GraphUtils.prepareSetGraph(graph)
+    GraphUtils.log("Phase: Preprocessing - Counting Triangles")
 
+    val setGraph = GraphUtils.prepareSetGraph(graph)
     val trianglesAccumulator = new GraphUtils.TriangleAccumulator()
     spark.sparkContext.register(trianglesAccumulator, "TrianglesAccumulator")
 
@@ -39,21 +39,22 @@ class Brute_Force(spark: SparkSession) extends Serializable {
 object Brute_Force {
   def main(args: Array[String]): Unit = {
     val (sc, spark) = GraphUtils.setupSpark("BruteForce")
-    val rawEdges = if (args.length > 0) GraphUtils.loadEdges(sc, args(0)) else GraphUtils.loadEdges(sc)
-    val graph = Graph.fromEdges(rawEdges.filter(e => e.srcId != e.dstId), defaultValue = 1)
+    val rawEdges = GraphUtils.loadEdgesFromArgs(sc, args)
 
-    val startTime = System.currentTimeMillis()
+    val (graph, startTime) = GraphUtils.createGraphAndLog(rawEdges.filter(e => e.srcId != e.dstId))
+
     val (_, triangles) = new Brute_Force(spark).run(graph)
 
     val intersectCount = triangles.count { case (_, _, _, e1, e2, e3) =>
       (for {
         i1 <- GraphUtils.intersectIntervals(e1, e2)
-        _  <- GraphUtils.intersectIntervals(i1, e3)
+        _ <- GraphUtils.intersectIntervals(i1, e3)
       } yield ()).isDefined
     }
 
-    println(s"Total triangles: ${triangles.size / 3} | Intersecting: ${intersectCount / 3}")
-    println(s"Time taken: ${System.currentTimeMillis() - startTime} ms")
+    println(s"Total number of triangles: ${triangles.size / 3}")
+    println(s"Formed triangles with edge intervals: ${intersectCount / 3}")
+    println(s"Time taken to calculate triangle scores: ${System.currentTimeMillis() - startTime} milliseconds")
     GraphUtils.close(sc, spark)
   }
 }

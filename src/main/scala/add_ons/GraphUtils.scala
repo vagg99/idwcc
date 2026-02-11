@@ -11,6 +11,9 @@ import scala.collection.mutable
 object GraphUtils {
   type TriangleMetadata = (VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))
 
+  private val logger = Logger.getRootLogger
+  def log(msg: String): Unit = logger.warn(msg)
+
   class TriangleAccumulator extends AccumulatorV2[TriangleMetadata, List[TriangleMetadata]] {
     private val collectedTriangles = mutable.ListBuffer[TriangleMetadata]()
     override def isZero: Boolean = collectedTriangles.isEmpty
@@ -31,9 +34,17 @@ object GraphUtils {
     val conf = new SparkConf().setAppName(appName).setMaster("local[*]")
     Logger.getRootLogger.setLevel(Level.WARN)
     Logger.getLogger("org").setLevel(Level.ERROR)
+    log("Getting context!!")
     val sc = new SparkContext(conf)
     val spark = SparkSession.builder().config(conf).getOrCreate()
+    log("We have context!!")
     (sc, spark)
+  }
+
+  def loadEdgesFromArgs(sc: SparkContext, args: Array[String]): RDD[Edge[(Long, Long)]] = {
+    val edges = if (args.length > 0) loadEdges(sc, args(0)) else loadEdges(sc)
+    log("edges loaded!!")
+    edges
   }
 
   def loadEdges(sc: SparkContext, path: String = DefaultDataset): RDD[Edge[(Long, Long)]] = {
@@ -43,6 +54,24 @@ object GraphUtils {
         val fields = line.split("\t")
         Edge(fields(0).toLong, fields(1).toLong, (fields(2).toLong, fields(3).toLong))
       }
+  }
+
+  def createGraphAndLog(edges: RDD[Edge[(Long, Long)]]): (Graph[Int, (Long, Long)], Long) = {
+    val graph = Graph.fromEdges(edges, defaultValue = 1)
+    log("graph is loaded!!")
+    log(s"vertices: ${graph.vertices.count()}, edges: ${graph.edges.count()}")
+    (graph, System.currentTimeMillis())
+  }
+
+  def aggregateAndReport(scores: VertexRDD[Double], startTime: Long, sc: SparkContext, spark: SparkSession): Unit = {
+    val total = if (scores.isEmpty()) 0.0 else scores.map(_._2).sum() / 3.0
+    reportResults(total, startTime, sc, spark)
+  }
+
+  def reportResults(totalTriangles: Double, startTime: Long, sc: SparkContext, spark: SparkSession): Unit = {
+    println(s"Total number of triangles: $totalTriangles")
+    println(s"Time taken to calculate triangle scores: ${System.currentTimeMillis() - startTime} milliseconds")
+    close(sc, spark)
   }
 
   def intersectIntervals(i1: (Long, Long), i2: (Long, Long)): Option[(Long, Long)] = {
@@ -71,11 +100,6 @@ object GraphUtils {
     if (setA.size <= setB.size) (setA, setB) else (setB, setA)
   }
 
-  // --- NEW CENTRALIZED METHODS TO REMOVE DUPLICATION ---
-
-  /**
-   * Prepares the setGraph used across all algorithm variations.
-   */
   def prepareSetGraph(graph: Graph[Int, (Long, Long)]): Graph[mutable.HashMap[VertexId, (Long, Long)], (Long, Long)] = {
     val nbrSets = getNeighborSets(graph)
     graph.outerJoinVertices(nbrSets) {
@@ -83,10 +107,8 @@ object GraphUtils {
     }
   }
 
-  /**
-   * Encapsulates the full counting workflow (Join + Aggregate).
-   */
   def executeTriangleCounting(graph: Graph[Int, (Long, Long)], queryInterval: Option[(Long, Long)] = None): VertexRDD[Double] = {
+    log("Phase: Preprocessing - Counting Triangles")
     val setGraph = prepareSetGraph(graph)
     computeTriangleScores(setGraph, queryInterval)
   }
