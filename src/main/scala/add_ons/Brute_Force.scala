@@ -1,168 +1,59 @@
 package add_ons
 
-import org.apache.log4j.Logger
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.graphx._
-import org.apache.spark.util.AccumulatorV2
-import scala.collection.mutable.ListBuffer
+import org.apache.spark.sql.SparkSession
 
-// --- 1. ACCUMULATOR DEFINITION ---
-class TriangleAccumulator extends AccumulatorV2[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long)), List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]] {
-  private val triangles = ListBuffer[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]()
-
-  override def isZero: Boolean = triangles.isEmpty
-
-  override def copy(): TriangleAccumulator = {
-    val newAcc = new TriangleAccumulator()
-    newAcc.triangles ++= triangles
-    newAcc
-  }
-
-  override def reset(): Unit = triangles.clear()
-
-  override def add(v: (VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))): Unit = {
-    triangles += v
-  }
-
-  override def merge(other: AccumulatorV2[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long)), List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]]): Unit = {
-    triangles ++= other.value
-  }
-
-  override def value: List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))] = triangles.toList
-}
-
-// ---  MAIN CLASS ---
 class Brute_Force(spark: SparkSession) extends Serializable {
 
-  def run(graph: Graph[Int, (Long, Long)]): (VertexRDD[Double], List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]) = {
-    runPreProcessed(graph)
-  }
+  def run(graph: Graph[Int, (Long, Long)]): (VertexRDD[Double], List[GraphUtils.TriangleMetadata]) = {
+    // Uses the shared helper to avoid duplication warnings
+    val setGraph = GraphUtils.prepareSetGraph(graph)
 
-  private def runPreProcessed(graph: Graph[Int, (Long, Long)]): (VertexRDD[Double], List[(VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))]) = {
-    // Efficiently create a neighbor set along with the time intervals for each vertex
-    val nbrSets: VertexRDD[Map[VertexId, (Long, Long)]] = {
-      graph.aggregateMessages[Map[VertexId, (Long, Long)]](
-        triplet => {
-          triplet.sendToSrc(Map(triplet.dstId -> triplet.attr))
-          triplet.sendToDst(Map(triplet.srcId -> triplet.attr))
-        },
-        (a, b) => a ++ b
-      )
-    }
-
-    // Join the graph with the neighbor sets
-    val setGraph: Graph[Map[VertexId, (Long, Long)], (Long, Long)] = graph.outerJoinVertices(nbrSets) {
-      (_, _, optSet) => optSet.getOrElse(Map.empty)
-    }
-
-    // Initialize accumulator for triangles
-    val trianglesAccumulator = new TriangleAccumulator()
+    val trianglesAccumulator = new GraphUtils.TriangleAccumulator()
     spark.sparkContext.register(trianglesAccumulator, "TrianglesAccumulator")
 
-    def edgeFunc(ctx: EdgeContext[Map[VertexId, (Long, Long)], (Long, Long), Double]): Unit = {
-      val (smallSet, largeSet) = if (ctx.srcAttr.size <= ctx.dstAttr.size) {
-        (ctx.srcAttr, ctx.dstAttr)
-      } else {
-        (ctx.dstAttr, ctx.srcAttr)
-      }
+    val scores: VertexRDD[Double] = setGraph.aggregateMessages[Double](
+      ctx => {
+        val (smallSet, largeSet) = GraphUtils.orderSets(ctx.srcAttr, ctx.dstAttr)
+        var triScore: Double = 0.0
 
-      val iter = smallSet.keys.iterator
-      var score: Double = 0.0
-
-      while (iter.hasNext) {
-        val commonVertex = iter.next()
-        if (commonVertex != ctx.srcId && commonVertex != ctx.dstId && largeSet.contains(commonVertex)) {
-          score += 1
-
-          // Collect triangles with their edge intervals
-          val triangle = List(ctx.srcId, commonVertex, ctx.dstId).sorted match {
-            case List(a, b, c) => (a, b, c)
+        for (v <- smallSet.keys if v != ctx.srcId && v != ctx.dstId && largeSet.contains(v)) {
+          triScore += 1.0
+          List(ctx.srcId, v, ctx.dstId).sorted match {
+            case a :: b :: c :: Nil =>
+              trianglesAccumulator.add((a, b, c, ctx.srcAttr(v), ctx.dstAttr(v), ctx.srcAttr(ctx.dstId)))
+            case _ =>
           }
-          // Safely accessing attributes (assuming map integrity from join)
-          val edge1Interval = ctx.srcAttr(commonVertex)
-          val edge2Interval = ctx.dstAttr(commonVertex)
-          val edge3Interval = ctx.srcAttr(ctx.dstId)
-
-          trianglesAccumulator.add((triangle._1, triangle._2, triangle._3, edge1Interval, edge2Interval, edge3Interval))
         }
-      }
+        ctx.sendToSrc(triScore / 2.0)
+        ctx.sendToDst(triScore / 2.0)
+      },
+      (a, b) => a + b
+    )
 
-      ctx.sendToSrc(score / 2)
-      ctx.sendToDst(score / 2)
-    }
-
-    val scores: VertexRDD[Double] = setGraph.aggregateMessages(ctx => edgeFunc(ctx), _ + _)
-
-    // Force evaluation of scores RDD with an action like collect
-    scores.collect()
-
-    // Return scores and collected triangles to the driver
+    scores.foreachPartition(_ => ())
     (scores, trianglesAccumulator.value)
   }
 }
 
 object Brute_Force {
   def main(args: Array[String]): Unit = {
+    val (sc, spark) = GraphUtils.setupSpark("BruteForce")
+    val rawEdges = if (args.length > 0) GraphUtils.loadEdges(sc, args(0)) else GraphUtils.loadEdges(sc)
+    val graph = Graph.fromEdges(rawEdges.filter(e => e.srcId != e.dstId), defaultValue = 1)
 
-    val (sc, spark) = GraphUtils.setupSpark("BruteForceTriangles")
-
-    // LOAD DATA
-    val rawEdges = if (args.length > 0) {
-      GraphUtils.loadEdges(sc, args(0))
-    } else {
-      GraphUtils.loadEdges(sc)
-    }
-
-    // Filter out self-loops
-    val edges = rawEdges.filter(edge => edge.srcId != edge.dstId)
-
-    // Create GraphX graph
-    val graph: Graph[Int, (Long, Long)] = Graph.fromEdges(edges, defaultValue = 1)
-
-    Logger.getRootLogger.warn("Graph is loaded!!")
-    // Logger.getRootLogger.warn(s"Vertices: ${graph.vertices.count}, Edges: ${graph.edges.count}")
-
-    // Create an instance of Brute_Force
-    val triangleScorer = new Brute_Force(spark)
-
-    Logger.getRootLogger.warn("Phase: Preprocessing - Counting Triangles")
-
-    // Record the start time
     val startTime = System.currentTimeMillis()
+    val (_, triangles) = new Brute_Force(spark).run(graph)
 
-    // Run the algorithm
-    val (scores, triangles) = triangleScorer.run(graph)
-
-    // Aggregate the total number of triangles
-    val totalTriangles = triangles.size / 3
-    println(s"Total number of triangles: $totalTriangles")
-
-    var intersectCount: Int = 0
-    println("Formed triangles with edge intervals:")
-
-    // Check for edge intersection and count
-    triangles.foreach { case (v1, v2, v3, e1, e2, e3) =>
-      if (intersectIntervals(e1, e2) && intersectIntervals(e1, e3) && intersectIntervals(e2, e3)) {
-        intersectCount += 1
-      }
+    val intersectCount = triangles.count { case (_, _, _, e1, e2, e3) =>
+      (for {
+        i1 <- GraphUtils.intersectIntervals(e1, e2)
+        _  <- GraphUtils.intersectIntervals(i1, e3)
+      } yield ()).isDefined
     }
 
-    val endTime = System.currentTimeMillis()
-
-    println(intersectCount / 3)
-
-    // Calculate the elapsed time
-    val elapsedTime = endTime - startTime
-    println(s"Time taken to calculate triangle scores: $elapsedTime milliseconds")
-
-    sc.stop()
-    spark.stop()
-  }
-
-  // Function to check if two intervals intersect
-  def intersectIntervals(interval1: (Long, Long), interval2: (Long, Long)): Boolean = {
-    val start = Math.max(interval1._1, interval2._1)
-    val end = Math.min(interval1._2, interval2._2)
-    start <= end
+    println(s"Total triangles: ${triangles.size / 3} | Intersecting: ${intersectCount / 3}")
+    println(s"Time taken: ${System.currentTimeMillis() - startTime} ms")
+    GraphUtils.close(sc, spark)
   }
 }

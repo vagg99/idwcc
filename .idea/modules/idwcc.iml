@@ -1,23 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module external.linked.project.id="idwcc [file:///home/ubuntu/IdeaProjects/idwcc/]" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="SBT" type="JAVA_MODULE" version="4">
+<module external.linked.project.id="idwcc [file:///D:/programming/projects/idwcc/]" external.linked.project.path="D:\programming\projects\idwcc" external.root.project.path="$MODULE_DIR$/../.." external.system.id="SBT" type="JAVA_MODULE" version="4">
   <component name="DisplayModuleName">
     <option name="name" value="idwcc" />
   </component>
   <component name="FacetManager">
     <facet type="Python" name="Python">
-      <configuration sdkName="Python 3.12 (idwcc)" />
+      <configuration sdkName="" />
     </facet>
   </component>
   <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_11" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$/../..">
-      <excludeFolder url="file://$MODULE_DIR$/../../.venv" />
       <excludeFolder url="file://$MODULE_DIR$/../../target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="idwcc.main" />
     <orderEntry type="module" module-name="idwcc.test" production-on-test="" />
-    <orderEntry type="library" name="Python 3.12 (idwcc) interpreter library" level="application" />
   </component>
 </module>
