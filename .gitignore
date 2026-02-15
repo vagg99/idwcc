@@ -1,3 +1,161 @@
-# --- Local datasets (SNAP etc.) ---
+################################################################################
+# OS / Editor junk
+################################################################################
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Vim / Emacs / swap files
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+################################################################################
+# IntelliJ IDEA / JetBrains
+################################################################################
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+
+################################################################################
+# Scala Metals / Bloop
+################################################################################
+.metals/
+.bloop/
+.bsp/
+.project
+.classpath
+.settings/
+
+################################################################################
+# Scala / Java build artifacts
+################################################################################
+*.class
+*.log
+
+# SBT / Scala build output
+target/
+project/target/
+project/project/
+# Keep sbt wrapper/definition files
+!project/build.properties
+!project/plugins.sbt
+!project/*.sbt
+!project/**/*.sbt
+!project/**/*.scala
+
+# SBT server / cache (optional but usually safe to ignore)
+.sbt/
+# If you use coursier, ignore its cache inside repo (rare)
+.coursier/
+
+################################################################################
+# Spark / Hadoop / Runtime outputs
+################################################################################
+# Spark event logs (if written inside repo)
+spark-events/
+spark_event_logs/
+event-logs/
+*.inprogress
+
+# Common runtime outputs
+logs/
+log/
+*.out
+*.err
+*.pid
+
+# If your jobs write outputs under these names (adjust to your repo)
+output/
+outputs/
+results/
+tmp/
+temp/
+checkpoint/
+checkpoints/
+
+################################################################################
+# Python (if you have scripts/notebooks alongside)
+################################################################################
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+################################################################################
+# Kubernetes / Helm (generated local state)
+################################################################################
+# Helm chart dependencies / packaged charts
+charts/*.tgz
+**/charts/*.tgz
+
+# Kustomize / kubectl local caches (if any)
+.kube/
+.kubeconfig
+kubectl-cache/
+
+################################################################################
+# LaTeX build artifacts (thesis)
+################################################################################
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.lof
+*.lot
+*.out
+*.run.xml
+*.toc
+*.synctex.gz
+*.synctex(busy)
+*.nav
+*.snm
+*.vrb
+
+# Common latex build dirs
+_build/
+build/
+latexmk/
+
+################################################################################
+# Archives / binaries
+################################################################################
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+################################################################################
+# Secrets / local configs (IMPORTANT)
+################################################################################
+# Env files
+.env
+.env.*
+!.env.example
+
+# Credentials / keys (if ever present)
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+
+# -----------------------
+# Local datasets
+# -----------------------
 /data/*
 !/data/.gitkeep
