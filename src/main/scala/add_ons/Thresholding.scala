@@ -2,6 +2,10 @@ package add_ons
 
 import org.apache.spark.graphx._
 
+/**
+ * This is the full extent of the `Tr-Thresholding`
+ * algorithm, as analyzed in my diploma thesis.
+ */
 class Thresholding extends Serializable {
   def run(queryTimeInterval: (Long, Long), graph: Graph[Int, (Long, Long)]): VertexRDD[Double] = {
     GraphUtils.executeTriangleCounting(graph, Some(queryTimeInterval))

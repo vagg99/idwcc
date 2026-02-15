@@ -2,6 +2,11 @@ package add_ons
 
 import org.apache.spark.graphx._
 
+
+/**
+ * This is the full extent of the `Tr-Filtering`
+ * algorithm, as analyzed in my diploma thesis.
+ */
 class TriangleCount_GraphFiltering extends Serializable {
   def run(queryTimeInterval: (Long, Long), graph: Graph[Int, (Long, Long)]): VertexRDD[Double] = {
 
@@ -13,7 +18,7 @@ class TriangleCount_GraphFiltering extends Serializable {
 object TriangleCount_GraphFiltering {
   def main(args: Array[String]): Unit = {
     val (sc, spark) = GraphUtils.setupSpark("TriangleCount_GraphFiltering")
-    val queryTimeInterval = (2L, 2L)
+    val queryTimeInterval = (2L, 4L)
     val edges = GraphUtils.loadEdgesFromArgs(sc, args)
     val startTime = System.currentTimeMillis()
     val filteredEdges = edges.filter(e => GraphUtils.intersectIntervals(e.attr, queryTimeInterval).isDefined)

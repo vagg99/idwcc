@@ -28,7 +28,7 @@ object GraphUtils {
     override def value: List[TriangleMetadata] = collectedTriangles.toList
   }
 
-  private val DefaultDataset = "data/amazon_generated_intervals.txt"
+  private val DefaultDataset = "data/dblp_generated_intervals.txt"
 
   def setupSpark(appName: String): (SparkContext, SparkSession) = {
     val conf = new SparkConf().setAppName(appName).setMaster("local[*]")

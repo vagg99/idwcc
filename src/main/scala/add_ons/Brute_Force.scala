@@ -3,6 +3,10 @@ package add_ons
 import org.apache.spark.graphx._
 import org.apache.spark.sql.SparkSession
 
+/**
+ * This is the full extent of the `Tr-Intervals`
+ * algorithm, as analyzed in my diploma thesis.
+ */
 class Brute_Force(spark: SparkSession) extends Serializable {
 
   def run(graph: Graph[Int, (Long, Long)]): (VertexRDD[Double], List[GraphUtils.TriangleMetadata]) = {
