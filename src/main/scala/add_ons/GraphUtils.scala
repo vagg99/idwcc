@@ -9,26 +9,54 @@ import org.apache.log4j.{Level, Logger}
 import scala.collection.mutable
 
 object GraphUtils {
+
+  /**
+   * Centralized query time window used by all algorithms.
+   *
+   * The 1st number marks the window's start timestamp (inclusive).
+   *
+   * The 2nd number marks the window's end timestamp (inclusive).
+   *
+   * @example
+   *  val QUERY_TIME_INTERVAL: (Long, Long) = (1L, 7L)
+   *
+   *  Valid discrete time moments:
+   *
+   *  [1, 2, 3, 4, 5, 6, 7]
+   */
+  val QUERY_TIME_INTERVAL: (Long, Long) = (2L, 6L)
+
+  def queryLen: Long = QUERY_TIME_INTERVAL._2 - QUERY_TIME_INTERVAL._1 + 1
+
+  private val DATASET_NAME = "orkut"
+  private val DefaultDataset = s"data/${DATASET_NAME}_generated_intervals.txt"
+
   type TriangleMetadata = (VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))
 
   private val logger = Logger.getRootLogger
+
   def log(msg: String): Unit = logger.warn(msg)
 
   class TriangleAccumulator extends AccumulatorV2[TriangleMetadata, List[TriangleMetadata]] {
     private val collectedTriangles = mutable.ListBuffer[TriangleMetadata]()
+
     override def isZero: Boolean = collectedTriangles.isEmpty
+
     override def copy(): TriangleAccumulator = {
       val newAcc = new TriangleAccumulator()
       newAcc.collectedTriangles ++= this.collectedTriangles
       newAcc
     }
+
     override def reset(): Unit = collectedTriangles.clear()
+
     override def add(v: TriangleMetadata): Unit = collectedTriangles += v
-    override def merge(other: AccumulatorV2[TriangleMetadata, List[TriangleMetadata]]): Unit = collectedTriangles ++= other.value
+
+    override def merge(other: AccumulatorV2[TriangleMetadata, List[TriangleMetadata]]): Unit =
+      collectedTriangles ++= other.value
+
     override def value: List[TriangleMetadata] = collectedTriangles.toList
   }
-
-  private val DefaultDataset = "data/dblp_generated_intervals.txt"
 
   def setupSpark(appName: String): (SparkContext, SparkSession) = {
     val conf = new SparkConf().setAppName(appName).setMaster("local[*]")
@@ -47,7 +75,7 @@ object GraphUtils {
     edges
   }
 
-  def loadEdges(sc: SparkContext, path: String = DefaultDataset): RDD[Edge[(Long, Long)]] = {
+  private def loadEdges(sc: SparkContext, path: String = DefaultDataset): RDD[Edge[(Long, Long)]] = {
     sc.textFile(path)
       .filter(line => !line.startsWith("#"))
       .map { line =>
@@ -68,7 +96,7 @@ object GraphUtils {
     reportResults(total, startTime, sc, spark)
   }
 
-  def reportResults(totalTriangles: Double, startTime: Long, sc: SparkContext, spark: SparkSession): Unit = {
+  private def reportResults(totalTriangles: Double, startTime: Long, sc: SparkContext, spark: SparkSession): Unit = {
     println(s"Total number of triangles: $totalTriangles")
     println(s"Time taken to calculate triangle scores: ${System.currentTimeMillis() - startTime} milliseconds")
     close(sc, spark)
@@ -85,29 +113,40 @@ object GraphUtils {
     spark.stop()
   }
 
-  def getNeighborSets(graph: Graph[_, (Long, Long)]): VertexRDD[mutable.HashMap[VertexId, (Long, Long)]] = {
+  private def getNeighborSets(graph: Graph[_, (Long, Long)]): VertexRDD[mutable.HashMap[VertexId, (Long, Long)]] = {
     graph.aggregateMessages[mutable.HashMap[VertexId, (Long, Long)]](
       triplet => {
         triplet.sendToSrc(mutable.HashMap(triplet.dstId -> triplet.attr))
         triplet.sendToDst(mutable.HashMap(triplet.srcId -> triplet.attr))
       },
-      (a, b) => { a ++= b; a },
+      (a, b) => {
+        a ++= b
+        a
+      },
       TripletFields.All
     )
   }
 
-  def orderSets(setA: mutable.Map[VertexId, (Long, Long)], setB: mutable.Map[VertexId, (Long, Long)]): (mutable.Map[VertexId, (Long, Long)], mutable.Map[VertexId, (Long, Long)]) = {
+  def orderSets(
+                 setA: mutable.Map[VertexId, (Long, Long)],
+                 setB: mutable.Map[VertexId, (Long, Long)]
+               ): (mutable.Map[VertexId, (Long, Long)], mutable.Map[VertexId, (Long, Long)]) = {
     if (setA.size <= setB.size) (setA, setB) else (setB, setA)
   }
 
   def prepareSetGraph(graph: Graph[Int, (Long, Long)]): Graph[mutable.HashMap[VertexId, (Long, Long)], (Long, Long)] = {
     val nbrSets = getNeighborSets(graph)
-    graph.outerJoinVertices(nbrSets) {
-      (_, _, optSet) => optSet.getOrElse(mutable.HashMap.empty[VertexId, (Long, Long)])
+    graph.outerJoinVertices(nbrSets) { (_, _, optSet) =>
+      optSet.getOrElse(mutable.HashMap.empty[VertexId, (Long, Long)])
     }
   }
 
-  def executeTriangleCounting(graph: Graph[Int, (Long, Long)], queryInterval: Option[(Long, Long)] = None): VertexRDD[Double] = {
+  // Default: uses the centralized QUERY_TIME_INTERVAL.
+  // If you ever need to run "no query interval", call executeTriangleCounting(graph, None).
+  def executeTriangleCounting(
+                               graph: Graph[Int, (Long, Long)],
+                               queryInterval: Option[(Long, Long)] = Some(QUERY_TIME_INTERVAL)
+                             ): VertexRDD[Double] = {
     log("Phase: Preprocessing - Counting Triangles")
     val setGraph = prepareSetGraph(graph)
     computeTriangleScores(setGraph, queryInterval)
@@ -115,7 +154,7 @@ object GraphUtils {
 
   def computeTriangleScores(
                              setGraph: Graph[mutable.HashMap[VertexId, (Long, Long)], (Long, Long)],
-                             queryInterval: Option[(Long, Long)] = None
+                             queryInterval: Option[(Long, Long)] = Some(QUERY_TIME_INTERVAL)
                            ): VertexRDD[Double] = {
     setGraph.aggregateMessages[Double](
       ctx => {
@@ -127,7 +166,7 @@ object GraphUtils {
           val validTriangle = for {
             i1 <- intersectIntervals(srcDstTime, ctx.dstAttr(v))
             i2 <- intersectIntervals(i1, ctx.srcAttr(v))
-            _  <- queryInterval match {
+            _ <- queryInterval match {
               case Some(qi) => intersectIntervals(i2, qi)
               case None => Some(i2)
             }
@@ -135,6 +174,7 @@ object GraphUtils {
 
           if (validTriangle.isDefined) score += 1.0
         }
+
         ctx.sendToSrc(score / 2.0)
         ctx.sendToDst(score / 2.0)
       },

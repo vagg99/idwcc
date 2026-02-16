@@ -2,32 +2,29 @@ package add_ons
 
 import org.apache.spark.graphx._
 
-
 /**
  * This is the full extent of the `Tr-Filtering`
  * algorithm, as analyzed in my diploma thesis.
  */
 class TriangleCount_GraphFiltering extends Serializable {
-  def run(queryTimeInterval: (Long, Long), graph: Graph[Int, (Long, Long)]): VertexRDD[Double] = {
-
-    val setGraph = GraphUtils.prepareSetGraph(graph)
-    GraphUtils.computeTriangleScores(setGraph, Some(queryTimeInterval))
+  def run(graph: Graph[Int, (Long, Long)]): VertexRDD[Double] = {
+    GraphUtils.executeTriangleCounting(graph)
   }
 }
 
 object TriangleCount_GraphFiltering {
   def main(args: Array[String]): Unit = {
     val (sc, spark) = GraphUtils.setupSpark("TriangleCount_GraphFiltering")
-    val queryTimeInterval = (2L, 4L)
+
     val edges = GraphUtils.loadEdgesFromArgs(sc, args)
-    val startTime = System.currentTimeMillis()
-    val filteredEdges = edges.filter(e => GraphUtils.intersectIntervals(e.attr, queryTimeInterval).isDefined)
-    val subgraph = Graph.fromEdges(filteredEdges, 1)
+    val queryTimeInterval = GraphUtils.QUERY_TIME_INTERVAL
 
-    GraphUtils.log(s"vertices: ${subgraph.vertices.count()}, edges: ${subgraph.edges.count()}")
+    val filteredEdges =
+      edges.filter(e => GraphUtils.intersectIntervals(e.attr, queryTimeInterval).isDefined)
 
-    val scores = new TriangleCount_GraphFiltering().run(queryTimeInterval, subgraph)
+    val (subgraph, startTime) = GraphUtils.createGraphAndLog(filteredEdges)
 
+    val scores = new TriangleCount_GraphFiltering().run(subgraph)
     GraphUtils.aggregateAndReport(scores, startTime, sc, spark)
   }
 }
