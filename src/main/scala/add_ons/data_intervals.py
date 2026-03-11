@@ -6,7 +6,9 @@ DATASET_NAME = "youtube"  # Choose your dataset here
 
 # Time window
 MIN_T = 1
-MAX_T = 10
+MAX_T = 20
+
+
 # =========================
 
 def get_paths():

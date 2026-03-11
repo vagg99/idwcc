@@ -18,17 +18,17 @@ object GraphUtils {
    * The 2nd number marks the window's end timestamp (inclusive).
    *
    * @example
-   *  val QUERY_TIME_INTERVAL: (Long, Long) = (1L, 7L)
+   * val QUERY_TIME_INTERVAL: (Long, Long) = (1L, 7L)
    *
-   *  Valid discrete time moments:
+   * Valid discrete time moments:
    *
-   *  [1, 2, 3, 4, 5, 6, 7]
+   * [1, 2, 3, 4, 5, 6, 7]
    */
-  val QUERY_TIME_INTERVAL: (Long, Long) = (2L, 6L)
+  val QUERY_TIME_INTERVAL: (Long, Long) = (5L, 15L)
 
   def queryLen: Long = QUERY_TIME_INTERVAL._2 - QUERY_TIME_INTERVAL._1 + 1
 
-  private val DATASET_NAME = "orkut"
+  private val DATASET_NAME = "youtube"
   private val DefaultDataset = s"data/${DATASET_NAME}_generated_intervals.txt"
 
   type TriangleMetadata = (VertexId, VertexId, VertexId, (Long, Long), (Long, Long), (Long, Long))

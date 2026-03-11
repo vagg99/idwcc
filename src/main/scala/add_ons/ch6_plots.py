@@ -155,10 +155,9 @@ def main():
             print(f"  {algo:14s}  time={runtime[algo][idx]:.3f}s  triangles={counts[algo][idx]}")
 
     # Generate PDFs
-    runtime_pdf = os.path.join(output_directory, "runtime_comparison.pdf")
-    counts_pdf = os.path.join(output_directory, "triangle_counts.pdf")
+    runtime_pdf = os.path.join(output_directory, "runtime_comparison_2.pdf")
+    counts_pdf = os.path.join(output_directory, "triangle_counts_2.pdf")
 
-    # IMPORTANT: Keep ylabel/title in Greek (as requested)
     grouped_bar_chart(
         datasets=datasets,
         values_by_algo=runtime,
