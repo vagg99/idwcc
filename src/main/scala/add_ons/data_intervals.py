@@ -2,14 +2,15 @@ import sys
 import random
 from pathlib import Path
 
-DATASET_NAME = "youtube"  # Choose your dataset here
+DATASET_NAME = "dblp"  # Choose your dataset here
 
-# Time window
+# Global time domain used for interval generation
 MIN_T = 1
-MAX_T = 20
+MAX_T = 100000
 
+# Set to an integer (e.g. 42) for reproducible results, or None for fresh randomness
+RANDOM_SEED = 42
 
-# =========================
 
 def get_paths():
     script_path = Path(__file__).resolve()
@@ -21,21 +22,6 @@ def get_paths():
     return input_file, output_file
 
 
-def build_valid_suffixes(min_t: int, max_t: int):
-    """
-    Returns a list of pre-formatted suffix strings: "\tstart\tend\n"
-    for all pairs (start,end) with min_t <= start <= end <= max_t.
-    """
-    if min_t > max_t:
-        raise ValueError(f"Invalid time window: MIN_T ({min_t}) > MAX_T ({max_t})")
-
-    suffixes = []
-    for s in range(min_t, max_t + 1):
-        for e in range(s, max_t + 1):
-            suffixes.append(f"\t{s}\t{e}\n")
-    return suffixes
-
-
 def clamp_time(t: int, min_t: int, max_t: int) -> int:
     if t < min_t:
         return min_t
@@ -44,76 +30,101 @@ def clamp_time(t: int, min_t: int, max_t: int) -> int:
     return t
 
 
+def normalize_interval(start: int, end: int) -> tuple[int, int]:
+    if start <= end:
+        return start, end
+    return end, start
+
+
+def generate_random_interval(randint_func, min_t: int, max_t: int) -> tuple[int, int]:
+    """
+    Generate a random interval by drawing start and end independently
+    and uniformly from [min_t, max_t], then sorting them so that
+    start <= end.
+
+    This matches the closest defensible reading of the paper's wording:
+    'the start and end times are drawn from a predefined time range'
+    using a uniform distribution.
+    """
+    a = randint_func(min_t, max_t)
+    b = randint_func(min_t, max_t)
+    return normalize_interval(a, b)
+
+
 def main():
+    if MIN_T > MAX_T:
+        print(f"Error: invalid time window [{MIN_T}, {MAX_T}]")
+        sys.exit(1)
+
     input_path, output_path = get_paths()
 
     if not input_path.exists():
         print(f"Error: Input file not found at {input_path}")
         sys.exit(1)
 
+    rng = random.Random(RANDOM_SEED)
+    randint = rng.randint
+
     print(f"Reading: {input_path}")
     print(f"Writing: {output_path}")
     print(f"Time window: [{MIN_T}, {MAX_T}]")
-
-    # Pre-bake valid suffixes to save CPU
-    valid_suffixes = build_valid_suffixes(MIN_T, MAX_T)
+    print(f"Random seed: {RANDOM_SEED}")
 
     try:
-        # 1MB buffer reduces the number of system calls to the hard drive.
-        buffer_size = 1024 * 1024
+        buffer_size = 1024 * 1024  # 1 MB
 
         with open(input_path, "r", encoding="utf-8", buffering=buffer_size) as in_file, \
                 open(output_path, "w", encoding="utf-8", buffering=buffer_size) as out_file:
 
-            # Local references for speed
             write_line = out_file.write
-            get_random_suffix = random.choice
-            suffixes = valid_suffixes
-
             count = 0
 
             for line in in_file:
-                # Fast skip for comments
+                # Preserve comments as-is
                 if line.startswith("#"):
                     write_line(line)
                     continue
 
-                clean_line = line.rstrip()
-                parts = clean_line.split()
+                parts = line.split()
 
+                # Skip empty / malformed lines
                 if not parts:
                     continue
 
-                # Case A: Data is missing intervals (Standard Graph)
-                # Write nodes + random (start,end) in the configured window
+                # Case A: Standard graph edge without intervals
+                # Expect at least two tokens: u v
                 if len(parts) < 3:
-                    # Expect at least two tokens for an edge
-                    if len(parts) >= 2:
-                        write_line(f"{parts[0]}\t{parts[1]}{get_random_suffix(suffixes)}")
-                    else:
-                        # If a malformed line exists, just skip it
+                    if len(parts) < 2:
                         continue
 
-                # Case B: Data has intervals, clamp them to [MIN_T, MAX_T]
+                    u, v = parts[0], parts[1]
+                    start, end = generate_random_interval(randint, MIN_T, MAX_T)
+                    write_line(f"{u}\t{v}\t{start}\t{end}\n")
+
+                # Case B: Existing interval data
+                # Treat the last two tokens as start/end and preserve any preceding columns
                 else:
                     try:
-                        start = int(parts[-2])
-                        end = int(parts[-1])
+                        raw_start = int(parts[-2])
+                        raw_end = int(parts[-1])
 
-                        new_start = clamp_time(start, MIN_T, MAX_T)
-                        new_end = clamp_time(end, MIN_T, MAX_T)
+                        start = clamp_time(raw_start, MIN_T, MAX_T)
+                        end = clamp_time(raw_end, MIN_T, MAX_T)
+                        start, end = normalize_interval(start, end)
 
                         base_content = "\t".join(parts[:-2])
-                        write_line(f"{base_content}\t{new_start}\t{new_end}\n")
+                        write_line(f"{base_content}\t{start}\t{end}\n")
 
                     except ValueError:
-                        # Fallback if parsing fails: treat as missing
-                        if len(parts) >= 2:
-                            write_line(f"{parts[0]}\t{parts[1]}{get_random_suffix(suffixes)}")
-                        else:
+                        # If the last two tokens are not parseable as ints,
+                        # fallback to treating the line as a plain edge.
+                        if len(parts) < 2:
                             continue
 
-                # Progress report (only every 1 million lines)
+                        u, v = parts[0], parts[1]
+                        start, end = generate_random_interval(randint, MIN_T, MAX_T)
+                        write_line(f"{u}\t{v}\t{start}\t{end}\n")
+
                 count += 1
                 if count % 1_000_000 == 0:
                     print(f"Processed {count:,} lines...", end="\r")

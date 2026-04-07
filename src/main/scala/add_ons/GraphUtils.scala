@@ -24,10 +24,11 @@ object GraphUtils {
    *
    * [1, 2, 3, 4, 5, 6, 7]
    */
-  val QUERY_TIME_INTERVAL: (Long, Long) = (5L, 15L)
+  val QUERY_TIME_INTERVAL: (Long, Long) = (50001L, 60000L)
 
   def queryLen: Long = QUERY_TIME_INTERVAL._2 - QUERY_TIME_INTERVAL._1 + 1
 
+  // amazon / dblp / youtube
   private val DATASET_NAME = "youtube"
   private val DefaultDataset = s"data/${DATASET_NAME}_generated_intervals.txt"
 

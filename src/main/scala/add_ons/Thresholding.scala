@@ -25,7 +25,9 @@ object Thresholding {
         .map { case (start, end) => edge.copy(attr = (start, end)) }
         .filter { e =>
           // Threshold set as percentage at the end of this line
-          ((e.attr._2 - e.attr._1 + 1).toDouble / queryLen) * 100.0 >= 50.0
+          // (e.g. '40.0' for an expected 40% threshold)
+          val threshold = 40.0
+          ((e.attr._2 - e.attr._1 + 1).toDouble / queryLen) * 100.0 >= threshold
         }
     }
 
